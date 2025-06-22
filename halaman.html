@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Aplikasi Kompresi DCT</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-image: url("latar.jpg");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        margin: 0;
+        padding: 20px;
+        text-align: center;
+        color: #fff;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      color: white;
+      font-size: 2.5em;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+
+    input[type="file"], input[type="text"] {
+      padding: 10px;
+      border: 1px solid #ced4da;
+      border-radius: 8px;
+      background-color: #ffffff;
+      transition: border-color 0.3s;
+    }
+
+    input[type="file"]:focus, input[type="text"]:focus {
+      border-color: #007BFF;
+      outline: none;
+    }
+
+    .button-bar {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 30px;
+    }
+
+    .button-bar button {
+      padding: 12px 25px;
+      border: none;
+      border-radius: 8px;
+      background-color: #007BFF;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .button-bar button:hover {
+      background-color: #0056b3;
+      transform: translateY(-2px);
+    }
+
+    .image-section {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .image-box {
+      width: 300px;
+      height: 300px;
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s;
+    }
+
+    .image-box:hover {
+      transform: scale(1.02);
+    }
+
+    .image-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      position: absolute;
+    }
+
+    .label {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      padding: 8px 0;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .loading {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Kompresi & Erosi Gambar (DCT)</h1><hr>
+
+  <div class="top-bar">
+    <input type="file" id="upload" accept="image/*">
+    <input type="text" id="filepath" placeholder="Lokasi file..." readonly>
+  </div>
+
+  <div class="button-bar">
+    <button onclick="showBinary()">Tampilkan Citra Biner</button>
+    <button onclick="compressDCT()">Kompresi ke DCT</button>
+    <button onclick="downloadImage()">Download Hasil Gambar</button>
+    <button onclick="resetAll()">Reset</button>
+  </div>
+
+  <div class="image-section">
+    <div class="image-box" id="originalBox">
+      <span class="label">GAMBAR ASLI</span>
+    </div>
+    <div class="image-box" id="dctBox">
+      <span class="label">HASIL DCT</span>
+    </div>
+    <div class="image-box" id="erosionBox">
+      <span class="label">EROSI DCT</span>
+    </div>
+  </div>
+
+  <script>
+    const uploadInput = document.getElementById('upload');
+    const filepathInput = document.getElementById('filepath');
+    const originalBox = document.getElementById('originalBox');
+    const dctBox = document.getElementById('dctBox');
+    const erosionBox = document.getElementById('erosionBox');
+    let originalImageData = null;
+    let processedImageData = null;
+
+    uploadInput.addEventListener('change', function () {
+      const file = this.files[0];
+      if (file) {
+        filepathInput.value = file.name;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.alt = 'Gambar Asli';
+          img.onload = function() {
+            originalBox.innerHTML = '';
+            originalBox.appendChild(img);
+            originalBox.innerHTML += `<span class="label">GAMBAR ASLI</span>`;
+            
+            // Simpan data gambar asli
+            originalImageData = e.target.result;
+          };
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function showBinary() {
+      if (!originalImageData) {
+        alert("Silakan upload gambar terlebih dahulu!");
+        return;
+      }
+
+      const img = new Image();
+      img.src = originalImageData;
+      
+      img.onload = function() {
+        // Tambah loading indicator
+        dctBox.innerHTML = '<div class="loading">Memproses...</div><span class="label">HASIL DCT</span>';
+        
+        setTimeout(() => {
+          // Buat canvas untuk memproses gambar
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          
+          // Ambil data pixel
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Konversi ke grayscale kemudian biner
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const binaryValue = avg > 128 ? 255 : 0;
+            data[i] = binaryValue;     // R
+            data[i + 1] = binaryValue; // G
+            data[i + 2] = binaryValue; // B
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          
+          // Tampilkan hasil
+          const resultImg = new Image();
+          resultImg.src = canvas.toDataURL();
+          dctBox.innerHTML = '';
+          dctBox.appendChild(resultImg);
+          dctBox.innerHTML += '<span class="label">CITRA BINER</span>';
+          
+          // Simpan data hasil
+          processedImageData = canvas.toDataURL();
+        }, 500);
+      };
+    }
+
+    function compressDCT() {
+      if (!originalImageData) {
+        alert("Silakan upload gambar terlebih dahulu!");
+        return;
+      }
+
+      const img = new Image();
+      img.src = originalImageData;
+      
+      img.onload = function() {
+        // Tambah loading indicator
+        dctBox.innerHTML = '<div class="loading">Memproses...</div><span class="label">HASIL DCT</span>';
+        erosionBox.innerHTML = '<div class="loading">Memproses...</div><span class="label">EROSI DCT</span>';
+        
+        setTimeout(() => {
+          // Buat canvas untuk memproses gambar
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          
+          // Simulasikan kompresi DCT sederhana (dalam praktik nyata menggunakan library)
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Kurangi resolusi warna untuk simulasi kompresi
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.round(data[i] / 32) * 32;     // R
+            data[i + 1] = Math.round(data[i + 1] / 32) * 32; // G
+            data[i + 2] = Math.round(data[i + 2] / 32) * 32; // B
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          
+          // Tampilkan hasil DCT
+          const dctImg = new Image();
+          dctImg.src = canvas.toDataURL();
+          dctBox.innerHTML = '';
+          dctBox.appendChild(dctImg);
+          dctBox.innerHTML += '<span class="label">HASIL DCT</span>';
+          
+          // Simulasikan erosi (dalam praktik nyata menggunakan algoritma morfologi)
+          const erosionCanvas = document.createElement('canvas');
+          const erosionCtx = erosionCanvas.getContext('2d');
+          erosionCanvas.width = img.width;
+          erosionCanvas.height = img.height;
+          erosionCtx.drawImage(img, 0, 0);
+          
+          const erosionData = erosionCtx.getImageData(0, 0, erosionCanvas.width, erosionCanvas.height);
+          const eData = erosionData.data;
+          
+          // Erosi sederhana - redupkan gambar
+          for (let i = 0; i < eData.length; i += 4) {
+            eData[i] = eData[i] * 0.7;     // R
+            eData[i + 1] = eData[i + 1] * 0.7; // G
+            eData[i + 2] = eData[i + 2] * 0.7; // B
+          }
+          
+          erosionCtx.putImageData(erosionData, 0, 0);
+          
+          // Tampilkan hasil erosi
+          const erosionImg = new Image();
+          erosionImg.src = erosionCanvas.toDataURL();
+          erosionBox.innerHTML = '';
+          erosionBox.appendChild(erosionImg);
+          erosionBox.innerHTML += '<span class="label">EROSI DCT</span>';
+          
+          // Simpan data hasil
+          processedImageData = canvas.toDataURL();
+        }, 1000);
+      };
+    }
+
+    function downloadImage() {
+      if (!processedImageData) {
+        alert("Silakan proses gambar terlebih dahulu!");
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = processedImageData;
+      link.download = 'hasil_dct_' + new Date().getTime() + '.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function resetAll() {
+      filepathInput.value = '';
+      uploadInput.value = '';
+      originalImageData = null;
+      processedImageData = null;
+      document.getElementById('originalBox').innerHTML = '<span class="label">GAMBAR ASLI</span>';
+      document.getElementById('dctBox').innerHTML = '<span class="label">HASIL DCT</span>';
+      document.getElementById('erosionBox').innerHTML = '<span class="label">EROSI DCT</span>';
+    }
+  </script>
+
+</body>
+</html>
